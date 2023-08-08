@@ -83,7 +83,7 @@
    m5_var(DATA_WIDTH, 32)
    m5_var(ADDR_WIDTH, 5)
    m5_var(RAM_WIDTH, 8)
-   m5_var(NUM_INSTRS, 12)
+   m5_var(NUM_INSTRS, 32)
    /* verilator lint_off BLKANDNBLK */
    /* verilator lint_off IMPLICIT */
    /* verilator lint_off ASCRANGE */
@@ -229,10 +229,10 @@
    logic fetch_enable_i;
    logic[31:0] instr_rdata; 
                   
-   logic[31:0] if_stage;
-   logic[31:0] id_stage;   
-   logic[31:0] ex_stage;              
-   logic[31:0] wb_stage;               
+   logic if_stage;
+   logic id_stage;   
+   logic ex_stage;              
+   logic wb_stage;               
                    
    // number of integer registers
    localparam NUM_WORDS = 2 ** (m5_ADDR_WIDTH - 1);
@@ -251,8 +251,10 @@
              
    assign instr_rdata = cv32e40p_tb_wrapper_i.cv32e40p_core_i.instr_rdata_i;
                   
-   assign if_stage = cv32e40p_tb_wrapper_i.cv32e40p_core_i.if_stage_i.instr_rdata_i;               
-   assign id_stage = cv32e40p_tb_wrapper_i.cv32e40p_core_i.id_stage_i.instr_rdata_i;
+   assign if_stage = cv32e40p_tb_wrapper_i.cv32e40p_core_i.if_stage_i.if_valid;               
+   assign id_stage = cv32e40p_tb_wrapper_i.cv32e40p_core_i.id_valid;
+   assign ex_stage = cv32e40p_tb_wrapper_i.cv32e40p_core_i.ex_valid;
+   assign wb_stage = cv32e40p_tb_wrapper_i.cv32e40p_core_i.wb_valid;
                    
    assign mem = cv32e40p_tb_wrapper_i.cv32e40p_core_i.id_stage_i.register_file_i.mem; 
    assign mem_fp = cv32e40p_tb_wrapper_i.cv32e40p_core_i.id_stage_i.register_file_i.mem_fp;
@@ -270,6 +272,26 @@
    logic [m5_NUM_INSTRS-1:0][m5_DATA_WIDTH-1:0] instrs;
                    
    assign instrs = '{
+      32'b101000000010010011,
+      32'b1111111101011111010110010011,
+      32'b1000000001100111,
+      32'b101101110000000000100011,
+      32'b101101110000000010100011,
+      32'b101101110000000100100011,
+      32'b101101110000000110100011,
+      32'b101000000010010011,
+      32'b11111010000001101000000011100111,
+      32'b1000001010010011,
+      32'b10101101000011010110011,
+      32'b1010010111,
+      32'b1001111001011010010011,
+      32'b11111111000001100111011010010011,
+      32'b1000000001011001001001100011,
+      32'b1010000001111001000001100011,
+      32'b111101110111011110010011,
+      32'b10110000110111111001100011,
+      32'b1010000011100010011,
+      32'b111100000000001100010011,
       32'b101000101110010101101010001,
       32'b1000101100000011000111000001001,
       32'b100000100000011000011000010011,
@@ -281,7 +303,7 @@
       32'b11110111100000010000000100010011,
       32'b10000000000000100010111,
       32'b10110110000000011000000110010011,
-      32'b10110000110010111 
+      32'b10110000110010111
    };
                   
    int unsigned            cycle_cnt_q;
@@ -452,31 +474,35 @@
                },
                render(){
                   
-                  let num = '>>3$instr_rdata[31:0]'.asInt().toString(2);
+                  let num = '$instr_rdata[31:0]'.asInt().toString(2);
+                  
+                  console.log(num)
+                  
                   let inst_box = this.getInitObjects().inst;
                   let inst_type = this.getInitObjects().inst_type;
                   let inst_bin = this.getInitObjects().inst_bin
                   let inst_hex = this.getInitObjects().inst_hex
                   
-                  this.instruction.then(function(result) {
+                  if(num !=0){
+                     this.instruction.then(function(result) {
                         const inst = new result.Instruction(num, {
                            ABI: false,
                            ISA: isa_cops
                         });
-                        
+            
                         let inst_str = inst.asm.toString();
                         let type = inst.fmt.toString();
                         let $bin = inst.bin.toString();
                         let $hex = inst.hex.toString();
-
                         inst_box.set({text: inst_str})
                         inst_type.set({text: type})
                         inst_bin.set({text: "Bin:"+$bin})
                         inst_hex.set({text: "Hex:"+$hex})
                         //this.global.canvas.renderAll.bind(this.global.canvas)()
                      });
+                  }
                }
-            /all_instrs[11:0]
+            /all_instrs[31:0]
                $inst[m5_DATA_WIDTH-1:0] = *instrs\[#all_instrs\]; 
                \viz_js
                   layout: "vertical",
@@ -518,27 +544,27 @@
                      });
                      
                      
-                     return {  asm, bin, box};
+                     return {asm, bin, box};
                   },
                   render() {
                      let num = '$inst'.asInt().toString(2);
                      let asm = this.getInitObjects().asm;
                      let box = this.getInitObjects().box;
                      let bin = this.getInitObjects().bin;
-                     
+               
                      bin.set({text: num});
                
-                     this.instruction.then(function(result) {
-                        const inst = new result.Instruction(num, {
-                           ABI: false,
-                           ISA: isa_cops
+                     if(num != 0){
+                        this.instruction.then(function(result) {
+                           const inst = new result.Instruction(num, {
+                              ABI: false,
+                              ISA: isa_cops
+                           });
+                           let asm_str = inst.asm.toString();
+                           asm.set({text: asm_str})
                         });
-                        let asm_str = inst.asm.toString();
-                        asm.set({text: asm_str})
-                        
-                     });
-               
-                     let curr_instr = '|core/instructions>>3$instr_rdata'.asInt().toString(2)
+                     }
+                     let curr_instr = '|core/instructions$instr_rdata'.asInt().toString(2)
                
                      if(curr_instr == num){
                         box.set({fill: "gray", width: 600, height: 20, top: 0, left: 0})
@@ -549,6 +575,11 @@
                   where: {top: 100, left: 300},
                   
          /waterfall
+            $if_stage = *if_stage;
+            $id_stage = *id_stage;
+            $ex_stage = *ex_stage;
+            $wb_stage = *wb_stage;
+            
             \viz_js
                   box: {strokeWidth: 0},
                   init(){
@@ -622,44 +653,103 @@
                      let curr_instr = rdata.asInt().toString(2)
                      let instr = this.getInitObjects().instr;
                      
-                     this.instruction.then((result) => {
-                        const inst = new result.Instruction(curr_instr, {
-                           ABI: false,
-                           ISA: isa_cops
+                     if(curr_instr != 0){
+                        this.instruction.then((result) => {
+                           const inst = new result.Instruction(curr_instr, {
+                              ABI: false,
+                              ISA: isa_cops
+                           });
+                           let asm_str = inst.asm.toString();
+                           instr.set({text: asm_str})
+                           this.global.canvas.renderAll.bind(this.global.canvas)()
                         });
-                        let asm_str = inst.asm.toString();
-                        instr.set({text: asm_str})
-                        this.global.canvas.renderAll.bind(this.global.canvas)()
-                     });
-                     //console.log(curr_instr)
-                     let check = 0;
+                     }else{
+                        instr.set({text: ""})
+                     }
+                     
+                     let check = -1;
                      let arr = [];
                      for(i=0; i<4; i++){
-                        let step_sig = i+index;
-                        console.log(step_sig);
+                        let step = -index+i
                         switch(check){
                            case 0:
-                              arr.push('0')
-                              check++;
+                              let id_stage_sig = '|core/waterfall$id_stage';
+                              id_stage_sig.step(step);
+                              let id_stage_val = id_stage_sig.asInt();
+                              if(id_stage_val = 0){
+                                 arr.push(0)
+                              }else{
+                                 check++;
+                                 arr.push(1)
+                              }
                               break;
                            case 1:
-                              arr.push('1')
-                              check++;
+                              let ex_stage_sig = '|core/waterfall$ex_stage';
+                              ex_stage_sig.step(step);
+                              let ex_stage_val = ex_stage_sig.asInt();
+                              if(ex_stage_val = 0){
+                                 arr.push(1)
+                              }else{
+                                 check++;
+                                 arr.push(2)
+                              }
                               break;
                            case 2:
-                              arr.push('2')
-                              check++;
-                              break;
-                           case 3:
-                              arr.push('3')
-                              check++;
+                              let wb_stage_sig = '|core/waterfall$wb_stage';
+                              wb_stage_sig.step(step);
+                              let wb_stage_val = wb_stage_sig.asInt();
+                              if(wb_stage_val = 0){
+                                 arr.push(2)
+                              }else{
+                                 check++;
+                                 arr.push(3)
+                              }
                               break;
                            default:
+                              let if_stage_sig = '|core/waterfall$if_stage';
+                              if_stage_sig.step(step);
+                              let if_stage_val = if_stage_sig.asInt();
+                              if(if_stage_val == 1){
+                                 check++;
+                                 arr.push(0)
+                              }else{
+                                 arr.push(-1)
+                              }
                               break;
                         }
                      }
-                     //console.log(arr)
+                     let ret_objects = [];
                      
+                     for(i=0; i<arr.length; i++){
+                        let color = "gray"
+                        switch(arr[i]){
+                           case -1:
+                              color = "gray"
+                              break;
+                           case 0:
+                              color = "darkblue"
+                              break;
+                           case 1:
+                              color = "darkgreen"
+                              break;
+                           case 2:
+                              color = "rgb(114,137,160)"
+                              break;
+                           case 3:
+                              color = "purple"
+                              break;
+                        }
+               
+                        ret_objects.push(new fabric.Rect({
+                           width: 30,
+                           height: 30,
+                           opacity: 1,
+                           fill: color,
+                           left: 1020 + 30*i,
+                           top: 900
+                        }));
+                     }
+                     return ret_objects;
                   }
                
          /registers
@@ -667,7 +757,7 @@
                $value[m5_DATA_WIDTH-1:0] = *mem\[#int_reg\];
                \viz_js
                   layout: "vertical",
-                  box: {top: 0, left: 0, strokeWidth: 5, stroke: "blue", width: 200, height: 30, fill: "white"},
+                  box: {top: 0, left: 0, strokeWidth: 5, stroke: "brown", width: 200, height: 30, fill: "white"},
                   render() {
                      let num = '$value'.asInt().toString()
                      let $index = this.getIndex()
@@ -693,7 +783,7 @@
                $value[m5_DATA_WIDTH-1:0] = *mem_fp\[#fp_reg\]; 
                \viz_js
                   layout: "vertical",
-                  box: {top: 0, left: 0, strokeWidth: 5, stroke:"blue", width: 200, height: 30, fill: "white"},
+                  box: {top: 0, left: 0, strokeWidth: 5, stroke:"brown", width: 200, height: 30, fill: "white"},
                   render() {
                      let num = '$value'.asInt().toString(16)
                      let $index = this.getIndex()+16
@@ -735,7 +825,7 @@
                layout: "vertical",
                box: {strokeWidth: 0},
             /mem_byte[7:0]
-               $ram[7:0] = *dp_ram\[#mem_word * 4 + #mem_byte\];
+               $ram[7:0] = cv32e40p_tb_wrapper_i.ram_i.dp_ram_i.mem[#mem_word * 8 + #mem_byte\];
                \viz_js
                   layout: "horizontal",
                   box: {top: -2, left: -4, strokeWidth: 5, stroke: "green", width: 50, height: 30, fill: "white"},
@@ -802,7 +892,7 @@
                    let bg = new fabric.Rect({
                               width: 870,
                               height: 600,
-                              fill: "blue",
+                              fill: "brown",
                               left: 1220,
                               top: -10
                    })
