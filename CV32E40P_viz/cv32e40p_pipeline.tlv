@@ -4,7 +4,7 @@
    // =================================================
    // Welcome!  New to Makerchip? Try the "Learn" menu.
    // =================================================
-   use(m5-1.0)   /// uncomment to use M5 macro library.
+   use(m5-1.0)   
 \SV
    // URL include paths:
    m4_define(['m4_cv32e40p_repo'], ['['https://raw.githubusercontent.com/chaitravi-ce/cv32e40p/master/']'])
@@ -94,7 +94,7 @@
     `pragma verilator lint_off MODDUP
     `pragma verilator lint_off lint
                   module cv32e40p_tb_wrapper
-    #(parameter // Parameters used by TB
+      #(parameter // Parameters used by TB
                 INSTR_RDATA_WIDTH = 32,
                 RAM_ADDR_WIDTH    = 20,
                 BOOT_ADDR         = 'h80,
@@ -247,7 +247,20 @@
    logic [7:0] dp_ram[bytes];
                   
    // csr registers
-   logic [31:0] fcsr;
+   logic [31:0] fpu;
+   logic [31:0] misa;
+   logic [31:0] debug_trigger_enable;
+   logic [31:0] apu;
+   logic [31:0] a_ext;
+   logic [31:0] corev_cluster;
+   logic [31:0] corev_pulp;   
+   logic [31:0] mstatus_fs_bit_high;
+   logic [31:0] mstatus_fs_bit_low;
+   logic [31:0] mstatus_mie_bit;
+   logic [1:0] mtvec_mode;
+   logic [31:0] num_hpm_events;               
+   logic [31:0] num_mhpmcounters;   
+   logic [31:0] zfinx;               
                   
    //fifo
    logic [1:0] fifo_cnt;
@@ -302,7 +315,20 @@
    assign mem = cv32e40p_tb_wrapper_i.cv32e40p_core_i.id_stage_i.register_file_i.mem; 
    assign mem_fp = cv32e40p_tb_wrapper_i.cv32e40p_core_i.id_stage_i.register_file_i.mem_fp;
      
-   assign fcsr = cv32e40p_tb_wrapper_i.cv32e40p_core_i.cs_registers_i.fcsr_update;
+   assign fpu = cv32e40p_tb_wrapper_i.cv32e40p_core_i.cs_registers_i.FPU[31:0];      
+   assign misa = cv32e40p_tb_wrapper_i.cv32e40p_core_i.cs_registers_i.MISA_VALUE[31:0]; 
+   assign debug_trigger_enable = cv32e40p_tb_wrapper_i.cv32e40p_core_i.cs_registers_i.DEBUG_TRIGGER_EN[31:0];
+   assign apu = cv32e40p_tb_wrapper_i.cv32e40p_core_i.cs_registers_i.APU[31:0];
+   assign a_ext = cv32e40p_tb_wrapper_i.cv32e40p_core_i.cs_registers_i.A_EXTENSION[31:0];
+   assign corev_cluster = cv32e40p_tb_wrapper_i.cv32e40p_core_i.cs_registers_i.COREV_CLUSTER[31:0];
+   assign corev_pulp = cv32e40p_tb_wrapper_i.cv32e40p_core_i.cs_registers_i.COREV_PULP[31:0];   
+   assign mstatus_fs_bit_high = cv32e40p_tb_wrapper_i.cv32e40p_core_i.cs_registers_i.MSTATUS_FS_BIT_HIGH[31:0];
+   assign mstatus_fs_bit_low = cv32e40p_tb_wrapper_i.cv32e40p_core_i.cs_registers_i.MSTATUS_FS_BIT_LOW[31:0];
+   assign mstatus_mie_bit = cv32e40p_tb_wrapper_i.cv32e40p_core_i.cs_registers_i.MSTATUS_MIE_BIT[31:0];
+   assign mtvec_mode = cv32e40p_tb_wrapper_i.cv32e40p_core_i.cs_registers_i.MTVEC_MODE[1:0];
+   assign num_hpm_events = cv32e40p_tb_wrapper_i.cv32e40p_core_i.cs_registers_i.NUM_HPM_EVENTS[31:0];               
+   assign num_mhpmcounters = cv32e40p_tb_wrapper_i.cv32e40p_core_i.cs_registers_i.NUM_MHPMCOUNTERS[31:0];   
+   assign zfinx = cv32e40p_tb_wrapper_i.cv32e40p_core_i.cs_registers_i.ZFINX[31:0];   
                   
    assign fifo_cnt = cv32e40p_tb_wrapper_i.cv32e40p_core_i.if_stage_i.prefetch_buffer_i.fifo_cnt[1:0];
    assign fifo_rdata = cv32e40p_tb_wrapper_i.cv32e40p_core_i.if_stage_i.prefetch_buffer_i.fetch_rdata_o[31:0];
@@ -350,6 +376,20 @@
    end
                    
    logic [m5_NUM_INSTRS-1:0][m5_DATA_WIDTH-1:0] instrs;
+               
+   logic [7:0][m5_DATA_WIDTH-1:0] prefetch_buffer;
+   logic counter = 0;
+                  
+   always_ff @(posedge clk) begin
+   	if (fifo_push) begin
+         assign prefetch_buffer[counter] = fifo_rdata;
+         assign counter = counter + 1;
+   	end
+      if (fifo_pop) begin
+         assign prefetch_buffer[counter] = 32'b0;
+         assign counter = counter - 1;
+   	end
+	end
                    
    assign instrs = '{
       32'b101000000010010011,
@@ -568,12 +608,28 @@
                )
             }
       
-            return ret_objects;
-      
             console.log(this.fifo_array)
       
          },
          where: {top: 200, left:-750}
+      /buffer_contents[1:0]
+         $buffer_contents[31:0] = *prefetch_buffer\[#buffer_contents\];
+         \viz_js
+            layout: "vertical",
+            box: {top: 0, left: 0, strokeWidth: 0, width: 200, height: 30},
+            render(){
+               console.log('$buffer_contents'.asInt().toString(16))
+               return [
+                  new fabric.Text('$buffer_contents'.asInt().toString(16), {
+                     fontFamily: "monospace",
+                     fill: "black",
+                     fontSize: 22,
+                     top: 100,
+                     left: 50
+                  })
+               ]
+            },
+            where: {top: 100, left:0}
 
 \TLV load_store_unit_viz(|_top)
    /lsu
@@ -782,21 +838,21 @@
       
                   let asm_str = inst.asm.toString();
       
-                  asm_str = "Fetch Data      :" + asm_str
+                  asm_str = "Fetch Data    :" + asm_str
       
                   fetch_data.set({text: asm_str})
                   this.global.canvas.renderAll.bind(this.global.canvas)()
                });
       
                return [
-                  new fabric.Text("IF Valid        :" + '$if_stage_if_valid'.asInt().toString(), {
+                  new fabric.Text("IF Valid      :" + '$if_stage_if_valid'.asInt().toString(), {
                      fontFamily: "monospace",
                      fill: "black",
                      fontSize: 24,
                      top: 130,
                      left: 50
                   }),
-                  new fabric.Text("ID Ready        :" + '$if_stage_id_ready'.asInt().toString(), {
+                  new fabric.Text("ID Ready      :" + '$if_stage_id_ready'.asInt().toString(), {
                      fontFamily: "monospace",
                      fill: "black",
                      fontSize: 24,
@@ -867,28 +923,28 @@
       
                   let asm_str = inst.asm.toString();
       
-                  asm_str = "Fetch Data      :" + asm_str
+                  asm_str = "Fetch Data    :" + asm_str
       
                   fetch_data.set({text: asm_str})
                   this.global.canvas.renderAll.bind(this.global.canvas)()
                });
       
                return [
-                  new fabric.Text("ID Valid        :" + '$id_stage_id_valid'.asInt().toString(), {
+                  new fabric.Text("ID Valid      :" + '$id_stage_id_valid'.asInt().toString(), {
                      fontFamily: "monospace",
                      fill: "black",
                      fontSize: 24,
                      top: 130,
                      left: 50
                   }),
-                  new fabric.Text("EX Ready        :" + '$id_stage_ex_ready'.asInt().toString(), {
+                  new fabric.Text("EX Ready      :" + '$id_stage_ex_ready'.asInt().toString(), {
                      fontFamily: "monospace",
                      fill: "black",
                      fontSize: 24,
                      top: 170,
                      left: 50
                   }),
-                  new fabric.Text("Pipeline Stall  :" + '$id_stage_pipeline_stall'.asInt().toString(), {
+                  new fabric.Text("Pipeline Stall:" + '$id_stage_pipeline_stall'.asInt().toString(), {
                      fontFamily: "monospace",
                      fill: "black",
                      fontSize: 24,
@@ -909,7 +965,7 @@
       \viz_js
          box: {top: 0, left: 0, width: 520, height: 400, fill: "#DECAAF", opacity: 0.4, stroke: "brown", strokeWidth: 6},
             init(){
-               
+      
                //m4_get_url_file(['https://gitlab.com/luplab/rvcodecjs/-/raw/main/core/Config.js'], js_modules)
                //m4_get_url_file(['https://gitlab.com/luplab/rvcodecjs/-/raw/main/core/Constants.js'], js_modules)
                //m4_get_url_file(['https://gitlab.com/luplab/rvcodecjs/-/raw/main/core/Instruction.js'], js_modules)
@@ -1128,22 +1184,131 @@
             },
             where: {top: 100, left: 350},
       
-      /csr_reg
-         $fcsr[31:0] = *fcsr;
+      /csr_reg[13:0]
          \viz_js
-            box: {fill: "white", height: 30, width: 200, strokeWidth: 5, stroke:"#FFC78F"},
+            layout: "vertical",
+            box: {top: 0, left: 0, strokeWidth: 5, stroke:"#FFC78F", width: 250, height: 30, fill: "white"},
+            where: {top: 100, left: 600},
+      
+      /csrs_instr
+         $fpu[31:0] = *fpu;
+         $misa[31:0] = *misa;
+         $debug_trigger_enable[31:0] = *debug_trigger_enable;
+         $apu[31:0] = *apu;
+         $a_ext[31:0] = *a_ext;
+         $corev_cluster[31:0] = *corev_cluster;
+         $corev_pulp[31:0] = *corev_pulp;
+         $mstatus_fs_bit_high[31:0] = *mstatus_fs_bit_high;
+         $mstatus_fs_bit_low[31:0] = *mstatus_fs_bit_low;
+         $mstatus_mie_bit[31:0] = *mstatus_mie_bit;
+         $num_hpm_events[31:0] = *num_hpm_events;
+         $num_mhpmcounters[31:0] = *num_mhpmcounters;
+         $zfinx[31:0] = *zfinx;
+         $mtvec_mode[1:0] = *mtvec_mode;
+         
+         \viz_js
             render(){
-               let $fcsr = '$fcsr'.asInt().toString(2)
                return[
-                  new fabric.Text("FCSR:       "+$fcsr, {
+                  new fabric.Text("FPU         :"+'$fpu'.asInt().toString(16), {
                      left: 10,
                      fontFamily: "monospace",
                      fill: "black",
                      fontSize: 20,
-                  })
+                  }),
+                  new fabric.Text("MISA        :"+'$misa'.asInt().toString(16), {
+                     top: 30,
+                     left: 10,
+                     fontFamily: "monospace",
+                     fill: "black",
+                     fontSize: 20,
+                  }),
+                  new fabric.Text("DEBUG_EN    :"+'$debug_trigger_enable'.asInt().toString(16), {
+                     top: 60,
+                     left: 10,
+                     fontFamily: "monospace",
+                     fill: "black",
+                     fontSize: 20,
+                  }),
+                  new fabric.Text("APU         :"+'$apu'.asInt().toString(16), {
+                     top: 90,
+                     left: 10,
+                     fontFamily: "monospace",
+                     fill: "black",
+                     fontSize: 20,
+                  }),
+                  new fabric.Text("A_EXT       :"+'$a_ext'.asInt().toString(16), {
+                     top: 120,
+                     left: 10,
+                     fontFamily: "monospace",
+                     fill: "black",
+                     fontSize: 20,
+                  }),
+                  new fabric.Text("COREV_CLUSTER:"+'$corev_cluster'.asInt().toString(16), {
+                     top: 150,
+                     left: 10,
+                     fontFamily: "monospace",
+                     fill: "black",
+                     fontSize: 20,
+                  }),
+                  new fabric.Text("COREV_PULP   :"+'$corev_pulp'.asInt().toString(16), {
+                     top: 180,
+                     left: 10,
+                     fontFamily: "monospace",
+                     fill: "black",
+                     fontSize: 20,
+                  }),
+                  new fabric.Text("FS_HIGH      :"+'$mstatus_fs_bit_high'.asInt().toString(16), {
+                     top: 210,
+                     left: 10,
+                     fontFamily: "monospace",
+                     fill: "black",
+                     fontSize: 20,
+                  }),
+                  new fabric.Text("FS_LOW       :"+'$mstatus_fs_bit_low'.asInt().toString(16), {
+                     top: 240,
+                     left: 10,
+                     fontFamily: "monospace",
+                     fill: "black",
+                     fontSize: 20,
+                  }),
+                  new fabric.Text("MIE_BIT      :"+'$mstatus_mie_bit'.asInt().toString(16), {
+                     top: 270,
+                     left: 10,
+                     fontFamily: "monospace",
+                     fill: "black",
+                     fontSize: 20,
+                  }),
+                  new fabric.Text("HPM_EVENTS   :"+'$num_hpm_events'.asInt().toString(16), {
+                     top: 300,
+                     left: 10,
+                     fontFamily: "monospace",
+                     fill: "black",
+                     fontSize: 20,
+                  }),
+                  new fabric.Text("MHPMCOUNTERS :"+'$num_mhpmcounters'.asInt().toString(16), {
+                     top: 330,
+                     left: 10,
+                     fontFamily: "monospace",
+                     fill: "black",
+                     fontSize: 20,
+                  }),
+                  new fabric.Text("ZFINX        :"+'$zfinx'.asInt().toString(16), {
+                     top: 360,
+                     left: 10,
+                     fontFamily: "monospace",
+                     fill: "black",
+                     fontSize: 20,
+                  }),
+                  new fabric.Text("MTVEC_MODE   :"+'$mtvec_mode'.asInt().toString(16), {
+                     top: 390,
+                     left: 10,
+                     fontFamily: "monospace",
+                     fill: "black",
+                     fontSize: 20,
+                  }),
                ]
             },
-            where: {top: 100, left: 630},
+            where: {top: 100, left: 600},
 
 \TLV memory_viz(|_top)
    /mem_word[m5_calc(2**m5_RAM_WIDTH/8-1):0]
@@ -1338,7 +1503,7 @@
          return { inst_bg, mem_bg, inst_header, mem_header, header, pipe_img }
       }
    /all_instrs[31:0]
-      $inst[m5_DATA_WIDTH-1:0] = *instrs\[#all_instrs\]; 
+      $inst[m5_DATA_WIDTH-1:0] = *instrs\[#all_instrs\];
       \viz_js
          layout: "vertical",
          box: {top: 30, left: 300, strokeWidth: 0, width: 20, height: 25, fill: "white"},
@@ -1400,6 +1565,8 @@
                   let asm_str = inst.asm.toString();
                   asm.set({text: asm_str})
                });
+            }else{
+               asm.set({text: ""})
             }
       
             let curr_instr = '|core/instruction$instr_rdata'.asInt().toString(2)
@@ -1534,6 +1701,17 @@
                for(i=0; i<4; i++){
                   let step = -index+i
                   switch(check){
+                     case -1:
+                        let if_stage_sig = '|core/waterfall$if_stage';
+                        if_stage_sig.step(step);
+                        let if_stage_val = if_stage_sig.asInt();
+                        if(if_stage_val == 1){
+                           check++;
+                           arr.push(0)
+                        }else{
+                           arr.push(-1)
+                        }
+                        break;
                      case 0:
                         let id_stage_sig = '|core/waterfall$id_stage';
                         id_stage_sig.step(step);
@@ -1568,15 +1746,6 @@
                         }
                         break;
                      default:
-                        let if_stage_sig = '|core/waterfall$if_stage';
-                        if_stage_sig.step(step);
-                        let if_stage_val = if_stage_sig.asInt();
-                        if(if_stage_val == 1){
-                           check++;
-                           arr.push(0)
-                        }else{
-                           arr.push(-1)
-                        }
                         break;
                      }
                   }
